@@ -199,6 +199,24 @@ if [ "$FS" = "" ]; then
 	else
         tune2fs -m 0 /dev/"$FS"
         mount -o remount /home
+		#",usrquota,grpquota" à ajouter à la partition /home
+		# la command edessous ne marchera pas en raid0
+		sed -i "s/defaults,relatime/defaults,relatime,usrquota,grpquota/g;" /etc/fstab
+		# quota admin
+		echo -e "${CGREEN}Voulez-vous définir un quota pour l'administrateur (y/n): $CEND"
+		read REPQUOTA
+		echo ""
+		if [ "$REPQUOTA" = "y" ]; then
+			echo -e "${CBLUE}Le quota s'exprime en Giga "G"$CEND$ {CYELLOW}(Exemple 100G)$CEND"
+			DISPO=$(df -h | awk  '/home/ {print $4}')
+			echo -e "${CGREEN}L'espace disque libre est de: $CEND${CYELLOW}$DISPO$CEND"
+			echo ""
+			echo -n -e "${CGREEN}Entrez le quota pour cet utilisateur: $CEND"
+			read QUOTA
+			echo ""
+		elif [ "$REPONSE" = "n" ]; then
+			QUOTA=0
+    fi
 	fi
 else
     tune2fs -m 0 /dev/"$FS"
@@ -339,7 +357,7 @@ options {
     84.200.70.40;
   };
 
-  dnssec-enable yes; 
+  dnssec-enable yes;
   dnssec-validation auto;
 
   auth-nxdomain no;
@@ -357,7 +375,7 @@ service bind9 restart
 apt-get update && apt-get upgrade -y
 echo "" ; set "132" "134" ; FONCTXT "$1" "$2" ; echo -e "${CBLUE}$TXT1${CEND}${CGREEN}$TXT2${CEND}" ; echo ""
 
-apt-get install -y htop openssl apt-utils python build-essential  libssl-dev pkg-config automake libcppunit-dev libtool whois libcurl4-openssl-dev libsigc++-2.0-dev libncurses5-dev nginx vim nano ccze screen subversion apache2-utils curl php5 php5-cli php5-fpm php5-curl php5-geoip unrar rar zip buildtorrent fail2ban ntp ntpdate munin ffmpeg aptitude
+apt-get install -y htop openssl apt-utils python build-essential  libssl-dev pkg-config automake libcppunit-dev libtool whois libcurl4-openssl-dev libsigc++-2.0-dev libncurses5-dev nginx vim nano ccze screen subversion apache2-utils curl php5 php5-cli php5-fpm php5-curl php5-geoip unrar rar zip buildtorrent fail2ban ntp ntpdate munin ffmpeg aptitude quota quotatool
 
 echo "" ; set "136" "134" ; FONCTXT "$1" "$2" ; echo -e "${CBLUE}$TXT1${CEND}${CGREEN}$TXT2${CEND}" ; echo ""
 
@@ -1584,6 +1602,46 @@ set "184" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}$USER${CEND}"
 set "186" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}${PASSNGINX}${CEND}"
 set "188" ; FONCTXT "$1" ; echo -e "${CGREEN}$TXT1${CEND}" ; echo ""
 
+# installation quota utilisateur
+# création fichier gestion quota
+
+# tests sans créer les fichiers !!!
+# quotacheck -vgum /home -f  et quotaon -avug
+# créaient automatiquement des fichiers aquota.group et aquota.user normalement,
+# donc a voir
+
+
+#touch /home/quota.group
+#touch /home/quota.user
+#chmod 600 /home/quota.*
+
+# modification des partitions
+#",usrquota,grpquota" à ajouter à la partition /home
+augtool set /files/etc/fstab/1[file='/home']/opt[1] "defaults"
+augtool set /files/etc/fstab/1[file='/home']/opt[2] "relatime"
+augtool set /files/etc/fstab/1[file='/home']/opt[3] "usrquota"
+augtool set /files/etc/fstab/1[file='/home']/opt[4] "grpquota"
+augtool save
+mount -o remount /home
+quotacheck -vgum /home -f
+quotaon -avug
+
+# echo -u $USER -bq $QUOTA -l $QUOTA $HOME | quotatool
+quotatool -u $USER -bq $QUOTA -l $QUOTA /home
+fi
+
+echo -e "${CBLUE}Installation terminée !$CEND"
+
+if [ "$REPQUOTA" = "n" ]; then
+echo ""
+echo -e "${CBLUE}Quota: $CEND${CYELLOW}Illimité$CEND"
+fi
+
+if [ "$REPQUOTA" = "y" ]; then
+echo ""
+echo -e "${CBLUE}Quota: $CEND${CYELLOW}$QUOTA$CEND"
+fi
+
 # ajout utilisateur supplémentaire
 
 while :; do
@@ -1677,6 +1735,32 @@ if [ "$FS" = "" ]; then
 else
     tune2fs -m 0 /dev/"$FS"
     mount -o remount /home/"$USERSUP"
+fi
+
+# demande quota usersup
+FS2=$(df -h | grep /home/$USERSUP | cut -c 6-9)
+if [ "$FS2" = "" ]; then
+	FS2=$(df -h | grep /home | cut -c 6-9)
+	if [ "$FS2" = "" ]; then
+		echo
+	else
+		echo -e "${CGREEN}Voulez-vous définir un quota pour l'utilisateur (y/n): $CEND"
+		read REPQUOTA
+		echo ""
+		if [ "$REPQUOTA" = "y" ]; then
+			echo -e "${CBLUE}Le quota s'exprime en Giga "G"$CEND$ {CYELLOW}(Exemple 100G)$CEND"
+			DISPO=$(df -h | awk  '/home/ {print $4}')
+			echo -e "${CGREEN}L'espace disque libre est de: $CEND${CYELLOW}$DISPO$CEND"
+			echo ""
+			echo -n -e "${CGREEN}Entrez le quota pour cet utilisateur: $CEND"
+			read QUOTA
+			echo ""
+		elif [ "$REPONSE" = "n" ]; then
+			QUOTA=0
+		fi
+	fi
+else
+	echo
 fi
 
 # variable passe nginx
@@ -1941,6 +2025,15 @@ chmod 640 /etc/nginx/passwd/*
 chown -c www-data:www-data /etc/nginx/passwd/*
 service nginx restart
 
+# filtre quota
+if [ "$FS2" = "" ]; then
+	echo
+else
+	# echo -u $USER -bq $QUOTA -l $QUOTA $HOME | quotatool
+	# méfiance $QUOTA peut-être $QUOTASUP ?
+	quotatool -u $USERSUP -bq $QUOTA -l $QUOTA /home
+fi
+
 # configuration page index munin
 if [ ! -d "/var/www/monitoring/localdomain" ]; then
 	MUNINROUTE=$"locahost/localhost"
@@ -1979,6 +2072,15 @@ echo "" ; set "218" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND}" ; echo ""
 set "182" ; FONCTXT "$1" ; echo -e "${CGREEN}$TXT1${CEND}"
 set "184" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}$USERSUP${CEND}"
 set "186" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}${PASSNGINXSUP}${CEND}"
+if [ "$REPQUOTA" = "n" ]; then
+	echo ""
+	echo -e "${CGREEN}Quota: $CEND${CYELLOW}Illimité$CEND"
+fi
+
+if [ "$REPQUOTA" = "y" ]; then
+	echo ""
+	echo -e "${CGREEN}Quota: $CEND${CYELLOW}$QUOTA$CEND"
+fi
 set "188" ; FONCTXT "$1" ; echo -e "${CGREEN}$TXT1${CEND}" ; echo ""
 fi
 done
@@ -2035,6 +2137,7 @@ set "240" "252" ; FONCTXT "$1" "$2" ; echo -e "${CYELLOW}$TXT1${CEND} ${CGREEN}$
 set "242" "254" ; FONCTXT "$1" "$2" ; echo -e "${CYELLOW}$TXT1${CEND} ${CGREEN}$TXT2${CEND}"
 set "244" "256" ; FONCTXT "$1" "$2" ; echo -e "${CYELLOW}$TXT1${CEND} ${CGREEN}$TXT2${CEND}"
 set "246" "258" ; FONCTXT "$1" "$2" ; echo -e "${CYELLOW}$TXT1${CEND} ${CGREEN}$TXT2${CEND}"
+set "310" "312" ; FONCTXT "$1" "$2" ; echo -e "${CYELLOW}$TXT1${CEND} ${CGREEN}$TXT2${CEND}"
 set "260" ; FONCTXT "$1" ; echo -n -e "${CBLUE}$TXT1 ${CEND}"
 read -r OPTION
 
@@ -2086,6 +2189,29 @@ if [ "$FS" = "" ]; then
 else
     tune2fs -m 0 /dev/"$FS"
     mount -o remount /home/"$USER"
+fi
+
+# filtre quota
+FS2=$(df -h | grep /home/$USER | cut -c 6-9)
+if [ "$FS2" = "" ]; then
+	FS2=$(df -h | grep /home | cut -c 6-9)
+	if [ "$FS2" = "" ]; then
+		echo
+	else
+		echo -e "${CGREEN}Voulez-vous définir un quota pour l'utilisateur (y/n): $CEND"
+		read REPQUOTA
+		echo ""
+		if [ "$REPQUOTA" = "y" ]; then
+			echo -e "${CBLUE}Le quota s'exprime en Giga "G"$CEND$ {CYELLOW}(Exemple 100G)$CEND"
+			DISPO=$(df -h | awk  '/home/ {print $4}')
+			echo -e "${CGREEN}L'espace disque libre est de: $CEND${CYELLOW}$DISPO$CEND"
+			echo -n -e "${CGREEN}Entrez le quota pour cet utilisateur: $CEND"
+			read QUOTA
+			echo ""
+		elif [ "$REPONSE" = "n" ]; then
+			QUOTA=0
+		fi
+	fi
 fi
 
 # variable email (rétro compatible)
@@ -2391,6 +2517,14 @@ sed -i "s/@RTOM@/rtom_$USER/g;" /var/www/graph/"$USER".php
 
 chown -R www-data:www-data /var/www/graph
 
+# filtre quota
+if [ "$FS" = "" ]; then
+	echo
+else
+	# echo -u $USER -bq $QUOTA -l $QUOTA $HOME | quotatool
+	quotatool -u $USER -bq $QUOTA -l $QUOTA /home
+fi
+
 # log users
 echo "userlog">> "$RUTORRENT"/histo.log
 sed -i "s/userlog/$USER:$PORT/g;" "$RUTORRENT"/histo.log
@@ -2399,6 +2533,15 @@ echo "" ; set "218" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND}" ; echo ""
 set "182" ; FONCTXT "$1" ; echo -e "${CGREEN}$TXT1${CEND}"
 set "184" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}$USER${CEND}"
 set "186" ; FONCTXT "$1" ; echo -e "${CBLUE}$TXT1${CEND} ${CYELLOW}${PASSNGINX}${CEND}"
+if [ "$REPQUOTA" = "n" ]; then
+	echo ""
+	echo -e "${CGREEN}Quota: $CEND${CYELLOW}Illimité$CEND"
+fi
+
+if [ "$REPQUOTA" = "y" ]; then
+	echo ""
+	echo -e "${CGREEN}Quota: $CEND${CYELLOW}$QUOTA$CEND"
+fi
 set "188" ; FONCTXT "$1" ; echo -e "${CGREEN}$TXT1${CEND}" ; echo ""
 ;;
 
@@ -2700,8 +2843,51 @@ else
 fi
 ;;
 
-# sortir gestion utilisateurs
+# modification quota utilisateur
 6)
+
+echo ""
+	echo -n -e "${CGREEN}Entrez le nom de l'utilisateur (en minuscule): $CEND"
+	read USER
+	echo ""
+
+# vérification présence /home
+FS=$(df -h | grep /home/$USER | cut -c 6-9)
+if [ "$FS" = "" ]; then
+	FS=$(df -h | grep /home | cut -c 6-9)
+	if [ "$FS" = "" ]; then
+		clear
+		echo ""
+		echo -e "${CRED}          Votre installation n'est pas adapté aux quotas utilisateurs$CEND"
+	else
+		echo ""
+		echo -e "${CBLUE}Le quota s'exprime en Giga "G"$CEND$ {CYELLOW}(Exemple 100G)$CEND"
+		DISPO=$(df -h | awk  '/home/ {print $4}')
+		echo -e "${CGREEN}L'espace disque libre est de: $CEND${CYELLOW}$DISPO$CEND"
+		echo ""
+		echo -n -e "${CGREEN}Entrez le quota pour cet utilisateur: $CEND"
+		read QUOTA
+		echo ""
+
+		# changement de quota utilisateur
+		# command quotatool -u "${USER}" -bq '200M' -l '250 MB' /home
+		# echo -u $USER -bq $QUOTA -l $QUOTA $HOME | quotatool
+		quotatool -u $USER -bq $QUOTA -l $QUOTA /home
+
+		echo -e "${CGREEN}Le quota utilisateur pour$CEND ${CYELLOW}$USER$CEND ${CBLUE}a bien été modifié.$CEND"
+		echo ""
+		echo -e "${CGREEN}Il est maintenant de:$CEND ${CYELLOW}$QUOTA$CEND"
+		echo ""
+	fi
+else
+	clear
+	echo ""
+	echo -e "${CRED}          Votre installation n'est pas adapté aux quotas utilisateurs$CEND"
+fi
+;;
+
+# sortir gestion utilisateurs
+7)
 echo "" ; set "290" ; FONCTXT "$1" ; echo -n -e "${CGREEN}$TXT1 ${CEND}"
 read -r REBOOT
 
