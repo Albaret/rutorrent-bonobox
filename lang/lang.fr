@@ -79,7 +79,7 @@
 252 : Rétablir un utilisateur
 254 : Modifier un mot de passe
 256 : Supprimer un utilisateur
-258 : Sortir
+258 : Modifier un quota utilisateur
 260 Numéro:
 262 Suspension de l'utilisateur.
 264 L'utilisateur
@@ -91,7 +91,7 @@
 276 Modification du mot de passe de l'utilisateur.
 278 Le mot de passe utilisateur de
 280 a bien été modifié.
-282 Voulez vous vraiment supprimer l'utilisateur 
+282 Voulez vous vraiment supprimer l'utilisateur
 284  (o/n):
 286 Suppression de l'utilisateur.
 288 a bien été supprimé.
@@ -105,4 +105,5 @@
 304 Choisissez votre installation:
 306 Full
 308 Light
-
+310 7
+312 : Sortir
